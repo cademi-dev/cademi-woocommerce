@@ -31,33 +31,52 @@ class CademiWoocommerceCore
 		if( ! isset($status))
 			return; 
 
+
+		// Cliente vindo das metainfos da order.
+		if( $order->get_user_id() == 0 ) {
+
+			$meta 	 = $order->get_data()['billing'];
+			$cliente = [
+				'cliente_nome' => @$meta['first_name'].(empty($meta['last_name']) ? '' : ' '.$meta['last_name']),
+				'cliente_email' 			=> @$meta['email'],
+				'cliente_endereco' 			=> @$meta['address_1'],
+				'cliente_endereco_comp' 	=> @$meta['address_2'],
+				'cliente_endereco_cidade' 	=> @$meta['city'],
+				'cliente_endereco_estado' 	=> @$meta['state'],
+				'cliente_endereco_cep' 		=> @$meta['postcode'],
+				'cliente_telefone' 			=> @$meta['phone']
+			];
+
+		// Cliente vindo das metainfos do proprio cliente.
+		} else {
+
+			$meta    = @array_filter(@array_map(function($a){ return $a[0]; }, get_user_meta($order->get_user_id())));
+			$cliente = [
+				'cliente_nome' => $meta['billing_first_name'].(empty($meta['billing_last_name']) ? '' : ' '.$meta['billing_last_name']),
+				'cliente_doc'				=> isset($meta['billing_cpf']) ? $meta['billing_cpf'] : @$meta['billing_cnpj'],
+				'cliente_email' 			=> @$meta['billing_email'],
+				'cliente_endereco' 			=> @$meta['billing_address_1'],
+				'cliente_endereco_n' 		=> @$meta['billing_number'],
+				'cliente_endereco_comp' 	=> @$meta['billing_address_2'],
+				'cliente_endereco_bairro' 	=> @$meta['billing_neighborhood'],
+				'cliente_endereco_cidade' 	=> @$meta['billing_city'],
+				'cliente_endereco_estado' 	=> @$meta['billing_state'],
+				'cliente_endereco_cep' 		=> @$meta['billing_postcode'],
+				'cliente_telefone' 			=> @$meta['billing_phone']
+			];
+		}
+
 		foreach( $order->get_items()  as $item ) {
 			if(has_term( 'sim', '_cademi_entrega_check', $item->get_product_id() )){
 
-				$meta = array_filter(array_map(function($a){ return $a[0]; }, get_user_meta($order->get_user_id())));
-
-				$response = $this->send($dados = [
+				$response = $this->send($dados = array_merge($cliente, [
 					'pagamento'		=> 'woocommerce',
 					'status' 		=> $status,
 					'codigo'		=> $order_id,
 					'produto_id' 	=> $item->get_product_id(),
 					'produto_nome' 	=> get_the_title($item->get_product_id()),
 					'valor'			=> $item->get_total(),
-					'cliente_nome'	=> $meta['billing_first_name'] . ' ' . $meta['billing_last_name'],
-					'cliente_email' => $meta['billing_email'],
-					
-					// cpf opcional - Brazilian Market on WooCommerce - https://br.wordpress.org/plugins/woocommerce-extra-checkout-fields-for-brazil/
-					'cliente_doc'	=> isset($meta['billing_cpf']) ? $meta['billing_cpf'] : @$meta['billing_cnpj'],
-
-					'cliente_endereco' 			=> @$meta['billing_address_1'],
-					'cliente_endereco_n' 		=> @$meta['billing_number'],
-					'cliente_endereco_comp' 	=> @$meta['billing_address_2'],
-					'cliente_endereco_bairro' 	=> @$meta['billing_neighborhood'],
-					'cliente_endereco_cidade' 	=> @$meta['billing_city'],
-					'cliente_endereco_estado' 	=> @$meta['billing_state'],
-					'cliente_endereco_cep' 		=> @$meta['billing_postcode'],
-					'cliente_telefone' 			=> @$meta['billing_phone']
-				]);
+				])); 
 
 				$order->add_order_note(sprintf(
 					"Cademí, comunicando status: <b>%s</b>, para o produto ID:%s %s. Resposta: <b>%s</b>",
@@ -80,9 +99,9 @@ class CademiWoocommerceCore
 		if(empty($this->options['cademi_woocommerce_url']))
 			return "URL não configurada";
 
-		$data['token'] = $this->options['cademi_woocommerce_token'];
+		$data['token'] = trim($this->options['cademi_woocommerce_token']);
 
-		$curl = curl_init($this->options['cademi_woocommerce_url']);
+		$curl = curl_init(trim($this->options['cademi_woocommerce_url']));
 		curl_setopt($curl, CURLOPT_POST, true);
 		curl_setopt($curl, CURLOPT_POSTFIELDS, http_build_query($data));
 		curl_setopt($curl, CURLOPT_RETURNTRANSFER, true);
